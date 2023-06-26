@@ -2,16 +2,20 @@
 This is the YAML-based router for Mailrise.
 """
 
+from functools import partial
 from logging import Logger
 import re
 import typing as typ
+import yaml
 
 from apprise import NotifyType
 
+from mailrise.config import ConfigFileLoader
 from mailrise.router import AppriseNotification, EmailMessage, AppriseAsset
 from mailrise.simple_router import (
-    SimpleRouter, _Key, _SimpleSender, _parsercpt,
+    SimpleRouter, _parse_simple_key, _load_simple_sender, _parsercpt,
 )
+from mailrise.skeleton import _logger
 
 APPRISE_ASSET = AppriseAsset(
     app_id='Mailrise',
@@ -32,8 +36,6 @@ APPRISE_ASSET = AppriseAsset(
 
 
 class RoyellRouter(SimpleRouter):  # pylint: disable=too-few-public-methods
-
-    senders: typ.List[typ.Tuple[_Key, _SimpleSender]]
 
     async def email_to_apprise(
         self, logger: Logger, email: EmailMessage, auth_data: typ.Any, **kwargs) \
@@ -71,4 +73,29 @@ class RoyellRouter(SimpleRouter):  # pylint: disable=too-few-public-methods
             )
 
 
-router = RoyellRouter()
+def load_from_yaml() -> RoyellRouter:
+    """Load a simple router from the YAML configs node."""
+    logger = _logger
+    yml = yaml.load(
+        '/etc/mailrise.conf', Loader=partial(ConfigFileLoader, logger=logger))
+    if not isinstance(yml, dict):
+        logger.critical('YAML root node is not a mapping')
+        raise SystemExit(1)
+    configs_node = yml.get('configs')
+    if not isinstance(configs_node, dict):
+        logger.critical('The configs node is not a YAML mapping')
+        raise SystemExit(1)
+    router = RoyellRouter(
+        senders=[
+            (_parse_simple_key(logger, key),
+             _load_simple_sender(logger, key, config))
+            for key, config in configs_node.items()]
+    )
+    if len(router.senders) < 1:
+        logger.critical('No Apprise targets are configured')
+        raise SystemExit(1)
+    logger.info('Loaded configuration with %d recipient(s)', len(router.senders))
+    return router
+
+
+router = load_from_yaml()
