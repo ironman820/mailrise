@@ -10,7 +10,7 @@ from apprise import NotifyType
 
 from mailrise.router import AppriseNotification, EmailMessage, AppriseAsset
 from mailrise.simple_router import (
-    SimpleRouter, _parsercpt,
+    SimpleRouter, _Key, _SimpleSender, _parsercpt,
 )
 
 APPRISE_ASSET = AppriseAsset(
@@ -32,6 +32,8 @@ APPRISE_ASSET = AppriseAsset(
 
 
 class RoyellRouter(SimpleRouter):  # pylint: disable=too-few-public-methods
+
+    senders: typ.List[typ.Tuple[_Key, _SimpleSender]]
 
     async def email_to_apprise(
         self, logger: Logger, email: EmailMessage, auth_data: typ.Any, **kwargs) \
